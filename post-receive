@@ -1,0 +1,109 @@
+#!/bin/sh
+
+PJ_NAME="my_project"
+DP_BRANCH="master"
+
+HTDOCS_ROOT="/var/www/scripts/dev"
+GIT_ROOT="/opt/git"
+LOG_DIR="/tmp"
+
+GIT_BIN="/usr/bin/git"
+
+PJ_DIR=$HTDOCS_ROOT/$PJ_NAME
+GIT_DIR=$GIT_ROOT/$PJ_NAME.git
+LOG_PATH=$LOG_DIR/$PJ_NAME"_deploy.log"
+
+
+# Base check
+
+# Check all work directories
+if [ -d $PJ_DIR ]; then
+  if [ ! -w $PJ_DIR ]; then
+    echo "ERROR: PROJECT DIR not writable!"
+    exit 1
+  fi
+else
+  echo "ERROR: PROJECT DIR not found!"
+  exit 1
+fi
+
+# Check all work directories
+if [ -d $GIT_DIR ]; then
+  if [ ! -w $GIT_DIR ]; then
+    echo "ERROR: GIT DIR not writable!"
+    exit 1
+  fi
+else
+  echo "ERROR: GIT DIR not found!"
+  exit 1
+fi
+
+if [ -d $LOG_DIR ]; then
+  if [ ! -w $LOG_DIR ]; then
+    echo "ERROR: LOG DIR not writable!"
+    exit 1
+  fi
+else
+  echo "ERROR: LOG DIR not found!"
+  exit 1
+fi
+
+# Check exe files
+if [ ! -f $GIT_BIN ]; then
+  echo "ERROR: GIT bin file not found!"
+  exit 1
+fi
+
+
+# Function logger
+logger(){
+  if [ ! $LOG_PATH ]; then
+    touch $LOG_PATH
+  fi
+  mess=[$(date '+%Y-%m-%d %H:%M:%S')]" "$1
+  echo $mess >> $LOG_PATH
+  echo $mess
+}
+
+# Function info
+branch_name=""
+branch_rev=""
+info(){
+  while read oldrev newrev refname; do
+    branch_name=$(echo $refname | sed 's/.*\///')
+    branch_rev=$newrev
+  done
+}
+
+# Function erase
+erase(){
+  logger "ERASE: cleaning the working directory..."
+  find $PJ_DIR -mindepth 1 -type f -exec rm -f {} \;
+  find $PJ_DIR -mindepth 1 -type d -empty -delete
+  if [ "$(ls -A $PJ_DIR)" ]; then
+    logger "ERASE: сleaning attempt failed! Exiting..."
+    exit 1
+  else
+    logger "ERASE: success!"
+  fi
+}
+
+# Function deploy
+deploy(){
+  logger "DEPLOY: deploying "$DP_BRANCH" branch to production..."
+  $GIT_BIN --work-tree=$PJ_DIR --git-dir=$GIT_DIR checkout -f
+  logger "DEPLOY: success!"
+}
+
+# Launcher do deploy
+do_deploy(){
+  info
+  if [ "$branch_name" = "$DP_BRANCH" ]; then
+    logger "DO DEPLOY: updating project \""$PJ_NAME"\" to commit "$branch_rev
+    erase
+    deploy
+    logger "DO DEPLOY: done!"
+  fi
+}
+
+do_deploy
